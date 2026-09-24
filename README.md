@@ -76,7 +76,7 @@ python tools/deploy_patch.py MyMod/data/9ba626afa44a3aa3.patch_0 --game-dir "<..
 
 ## 版本
 
-当前 **0.1.1**，详见 [CHANGELOG.md](hd2-mod-update/CHANGELOG.md)。
+当前 **0.1.2**，详见 [CHANGELOG.md](hd2-mod-update/CHANGELOG.md)。
 
 ## 许可
 

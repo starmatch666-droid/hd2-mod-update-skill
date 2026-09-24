@@ -1,19 +1,46 @@
-## 0.1.1 — 2026-09-24
-- 修 `verify` 的假阳性：旧逻辑把「目标构建自己」的哈希也判成旧锁，导致每次更新完再校验都会
-  误报「需要 lock」。新增 `stale_locks()` / `stale_builds()`：只把「已知但≠目标构建」的哈希判为旧锁，
-  并单独报告旧 build 号；`lock` 的回读断言改用同一判据。
-- `lock` 现在只替换「历史里真实出现过的构建号」，避免误伤模组自己的 8 位数字常量。
-- `variants` 目录参数改为**递归**取 `*.zip`，并跳过 `handoff/skill/toolkit/一键/修复` 等打包目录。
-- 备份改为**镜像原路径**（`backup/<原路径>`）：以前按文件名备份，不同目录里的同名 zip 会互相覆盖。
-- 新增 `variants` 子命令：一次检查/刷新**同一个模组的多个保留版本**（作者常故意保留效果不同的多版），
-  目录会自动取其下 `*.zip` 并跳过 `backup*/revision-backups/docs-*/publish*`。
-  本次实战：14 个训斥/纪元变体 + 18 个其它模组的保留版本，全部只改 2 行（锁 + build）。
+## 0.1.2 — 2026-09-24
 
-# CHANGELOG
+修两个会让旧锁「漏报」和「越修越坏」的 bug，均由 `game_sha256` 这个锁字段名引起。
 
-## 0.1.0 — 2026-09-24
-- 首次发布。基于 25327279 → 25480438 的一次真实更新总结：
-  A 类构建锁（文本 / bytecode 两种形态）离线批量刷新；
-  B/C 类（指针槽 RVA、表模板）的只读探针与锚点重写流程；
-  归档 name-hash 铁律、槽位连续性、备份与回读校验；
-  附工具：hd2modupdate / hd2update / deploy_patch / hd2archive / probe。
+### 1. `verify` 漏报旧锁（严重）
+
+`TEXT_LOCKS` 只认 `module_sha256` / `game_dll_sha256` / `dll_sha256`。
+字段名叫 `game_sha256` 的 mod 落到「裸 64-hex 常量」那条分支，`lock_report` 给它加了
+`dll:` 前缀，而 `stale_locks()` 却拿**带前缀的标签**去裸哈希集合里查成员 → 永远查不到
+→ **旧锁一律不报，`verify` 说「合格」**。
+
+真实后果：`genji_threefold` / `warp_pack_safe` 两个旧包（锁还是 25327279）通过了 verify。
+
+- `stale_locks()` 改为用**裸哈希**判断（`l.split(':',1)[1]`）。
+- `TEXT_LOCKS` 增加 `game_sha256`，让它走文本替换路径。
+- `lock_report()` 对同一哈希去重，避免同一个锁被算两次（`旧锁=2`）。
+
+### 2. 大小写：会把 mod 改坏（严重）
+
+文本替换路径用 `new_dll.encode()`（**小写**），而裸 hex 路径用 `new_dll.upper()`（**大写**）。
+`game_sha256` 原本走裸 hex 路径，于是刷锁后锁值被**强制转成大写**。
+
+但 mod 里的比对是：
+
+```lua
+function api.module_hash(address)
+    for i=0,31 do parts[#parts+1]=string.format('%02x',digest[i]) end   -- 小写
+end
+assert(api.module_hash(game)==SPEC.game_sha256, 'unsupported_game_build_no_write')
+```
+
+`"2e2c…" == "2E2C…"` 恒为 false → **断言失败，mod 直接不加载**（比不刷锁还糟：
+不刷锁至少只影响这一个 mod，改错大小写会让它从「勉强能跑」变成「彻底不加载」）。
+
+- 加 `game_sha256` 进 `TEXT_LOCKS` 后走小写路径，大小写与原文件一致。
+- 已修复受影响的 `Genji-Saber-Knife` / `Warp-Pack-Safe-10m` 两个制品。
+
+### 回归测试
+
+| 用例 | 期望 | 结果 |
+|---|---|---|
+| `game_sha256` = 旧锁 | 报旧锁、退出码 1 | ✓ `旧锁=1 需要 lock` |
+| `game_sha256` = 新锁 | 通过、退出码 0 | ✓ `旧锁=0` |
+| 对旧锁文件跑 `lock` | 值保持**小写** | ✓ |
+| `game_dll_sha256` 旧包（老路径） | 仍报旧锁 | ✓ `旧锁=1 旧 build=25327279` |
+

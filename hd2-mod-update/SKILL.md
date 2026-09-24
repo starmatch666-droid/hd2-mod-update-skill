@@ -8,6 +8,7 @@ description: 《绝地潜兵2》游戏更新后修复「Lua 注入型」mod（Bi
 ## 0. 先理解为什么会"集体失效"
 
 注入型 addon 里都嵌着一个**构建锁**：`module_sha256` = 当时 `data/game/game.dll` 的 SHA-256。
+字段名可能是 `module_sha256` / `game_dll_sha256` / `game_sha256` / `dll_sha256`，**文本锁定必须保留原大小写**（Lua 侧用 `%02x` 算小写，写成大写会让 `assert` 恒假、mod 直接不加载）。
 游戏一更新，锁不匹配，addon 就**拒绝写内存**，只在日志里留一条
 `unsupported_game_dll_no_write`（**不会写坏数据**，这是设计成这样的）。
 
@@ -18,7 +19,7 @@ description: 《绝地潜兵2》游戏更新后修复「Lua 注入型」mod（Bi
 
 | 类 | 本质 | 日志特征 | 修法 |
 |---|---|---|---|
-| **A 构建锁** | `module_sha256`(文本) 或 bytecode mod 里**大写**的 DLL/EXE SHA-256 | `unsupported_game_dll_no_write` / `startup_failed_no_write` | **离线**：`tools/hd2modupdate.py`（源码树或成品包） |
+| **A 构建锁** | 命名锁字段（`module_sha256`/`game_sha256`/`game_dll_sha256`/`dll_sha256`，**保持原大小写**）或 bytecode mod 里**大写**的裸 hex 常量 | `unsupported_game_dll_no_write` / `startup_failed_no_write` | **离线**：`tools/hd2modupdate.py`（源码树或成品包） |
 | **B 指针槽位** | `owner_rva`（game.dll 里指向组件指针槽的 RVA）、`candidate_slot`（表相对指针的偏移） | `not_found` / `anchor_mismatch` / `waiting_for_entity_locator` / `slot_mismatch` | 进游戏跑 `tools/hd2update.py probe build` 生成的**只读探针** → 取新 RVA → `anchors` 重写 |
 | **C 表模板** | 记录序号 / 哈希映射 / 行字节指纹（`record_index`、`hashmap`、`original`/`anchor_row`） | `template_mismatch` / `ldld_block_not_found` / `guard_failed` | 同上探针 dump 当前表 → 重算这些常量 |
 

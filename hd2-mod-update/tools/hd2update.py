@@ -61,6 +61,7 @@ CURRENT_EXE = CURRENT['exe_sha256'].lower()
 TEXT_LOCKS = [
     re.compile(rb'(module_sha256\s*[:=]\s*["\'])([0-9a-fA-F]{64})(["\'])'),
     re.compile(rb'(game_dll_sha256\s*[:=]\s*["\'])([0-9a-fA-F]{64})(["\'])'),
+    re.compile(rb'(game_sha256\s*[:=]\s*["\'])([0-9a-fA-F]{64})(["\'])'),
     re.compile(rb'(dll_sha256\s*[:=]\s*["\'])([0-9a-fA-F]{64})(["\'])'),
 ]
 BUILD_IDS = [
@@ -149,10 +150,13 @@ def stale_locks(found, cur_dll: str | None = None, cur_exe: str | None = None) -
     cur_exe = (cur_exe or CURRENT_EXE).lower()
     bad = []
     for l in sorted(found):
+        # l 有两种形态：裸哈希（来自 module_sha256="…"）或带前缀 dll:/bytecode:（来自"裸 hex"写法）。
+        # 判定必须用【裸哈希】v，不能拿带前缀的 l 去查 KNOWN_DLL —— 否则纯 hex 写法的 mod
+        # 永远判不出旧锁（真实踩坑：genji_threefold / warp_pack_safe）。
         v = l.split(':', 1)[1] if l.startswith(('dll:', 'bytecode:')) else l
-        if ((l in KNOWN_DLL or l in KNOWN_EXE) and v != cur_dll and v != cur_exe
-                and v not in (CURRENT_DLL, CURRENT_EXE)):
-            bad.append(l)
+        if v in KNOWN_DLL or v in KNOWN_EXE:
+            if v != cur_dll and v != cur_exe and v not in (CURRENT_DLL, CURRENT_EXE):
+                bad.append(l)
     return bad
 
 
@@ -173,7 +177,8 @@ def lock_report(body: bytes):
             found.add(m.group(2).decode().lower())
     for m in HEX64.finditer(body):
         v = m.group(0).decode().lower()
-        if v in KNOWN_DLL or v in KNOWN_EXE:
+        # 已经被 TEXT_LOCKS 记为裸哈希的，不要再记一条带前缀的，否则同一个锁会被算两次
+        if (v in KNOWN_DLL or v in KNOWN_EXE) and v not in found:
             found.add(('bytecode:' if v in KNOWN_EXE else 'dll:') + v)
     for rx in BUILD_IDS:
         for m in rx.finditer(body):
