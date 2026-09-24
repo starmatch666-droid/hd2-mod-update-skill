@@ -1,0 +1,11 @@
+{
+  "note": "known HD2 builds -> lock values. Append new builds as they ship.",
+  "builds": [
+    {"build": "24826606", "game_dll_sha256": "cc75948d90fdfde259dcb519e9933db7ffa3ccb281ce4fb89e6b1b011557470c",
+     "exe_sha256": "a09ff52663e73b94fb0cac0dcb5ba84ffd10ecf44f74a8921ac66af923988cc3"},
+    {"build": "25327279", "game_dll_sha256": "73374bd4e38386beb9a23bef480082b67d457ebc77485fbec5f488b4e95e201f",
+     "exe_sha256": "d8e23968d1412b07e06785321727d63edf74e711214d6f6adeb3bfca95ca6827"},
+    {"build": "25480438", "game_dll_sha256": "2e2c3b7c2500646dadd5f2b4c6e0504dbb7e7896139f64cddc0d1813c718f51e",
+     "exe_sha256": "f5fee03dcfdb2e553a4752c283590950ac13316b376d8196aa556ff0400d5f06"}
+  ]
+}
